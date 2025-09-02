@@ -1,0 +1,11 @@
+{
+  "name": "@gutengraph/monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "repository": "git@github.com:haziqmumtaz/GutenGraph.git",
+  "author": "Haziq Mumtaz",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ]
+}
