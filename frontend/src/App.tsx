@@ -2,12 +2,13 @@ import { useState } from "react";
 import { PageShell } from "./components/PageShell";
 import { InputRow } from "./components/InputRow";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { LoadingBlock } from "./components/LoadingBlock";
+import { LoadingSpinner } from "./components/LoadingSpinner";
 import { AnimatedBook } from "./components/AnimatedBook";
 import { AnimatedBackground } from "./components/AnimatedBackground";
-import { getBookMetaData } from "./api/books";
+import { CharacterGraph } from "./components/CharacterGraph";
+import { getBookMetaData, analyzeBook } from "./api/books";
 import { isValidBookId } from "./utils/validators";
-import type { BookMeta } from "./types/api";
+import type { BookMeta, AnalysisResult } from "./types/api";
 
 function App() {
   const [rawValue, setRawValue] = useState("");
@@ -16,19 +17,23 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<BookMeta | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
 
   const valid = isValidBookId(rawValue);
 
   const handleSubmit = async () => {
     if (!valid) {
-      return; // Invalid input, do nothing
+      return;
     }
 
     const id = Number(rawValue);
     setLoading(true);
-    setImageLoading(false);
     setError(null);
     setMeta(null);
+    setAnalysisResult(null);
     setBookId(id);
 
     try {
@@ -43,6 +48,24 @@ function App() {
     }
   };
 
+  const handleAnalyze = async () => {
+    if (!bookId) return;
+
+    setAnalyzing(true);
+    setError(null);
+
+    try {
+      const result = await analyzeBook(bookId);
+      setAnalysisResult(result);
+      setAnalyzing(false);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to analyze book";
+      setError(errorMessage);
+      setAnalyzing(false);
+    }
+  };
+
   const handleImageLoaded = () => {
     setImageLoading(false);
   };
@@ -50,20 +73,10 @@ function App() {
   const showLoadingAnimation = loading || imageLoading;
   const showBook = meta && !showLoadingAnimation;
 
-  // Debug logging
-  console.log("App state:", {
-    loading,
-    imageLoading,
-    showLoadingAnimation,
-    showBook,
-    hasMeta: !!meta,
-  });
-
   return (
     <>
       <AnimatedBackground />
       <PageShell title="GutenGraph">
-        {/* Input Section */}
         <div
           style={{
             width: "100%",
@@ -94,12 +107,10 @@ function App() {
           )}
         </div>
 
-        {/* Error Display */}
         {error && <ErrorBanner message={error} />}
 
-        {/* Loading Animation */}
         {showLoadingAnimation && (
-          <LoadingBlock
+          <LoadingSpinner
             label={
               loading
                 ? `Fetching metadata for ${bookId}…`
@@ -108,12 +119,58 @@ function App() {
           />
         )}
 
-        {/* Book Display */}
         {showBook && (
-          <AnimatedBook meta={meta} onImageLoaded={handleImageLoaded} />
+          <>
+            <AnimatedBook meta={meta} onImageLoaded={handleImageLoaded} />
+            <div style={{ marginTop: "1rem", textAlign: "center" }}>
+              {analyzing ? (
+                <LoadingSpinner label="Analyzing character interactions..." />
+              ) : (
+                <button
+                  onClick={handleAnalyze}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    borderRadius: "8px",
+                    color: "white",
+                    padding: "0.75rem 1.5rem",
+                    fontSize: "1rem",
+                    cursor: "pointer",
+                    backdropFilter: "blur(10px)",
+                    transition: "all 0.3s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background =
+                      "rgba(255, 255, 255, 0.2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background =
+                      "rgba(255, 255, 255, 0.1)";
+                  }}
+                >
+                  Analyze Interactions
+                </button>
+              )}
+            </div>
+            {analysisResult && analysisResult.graph && (
+              <div style={{ marginTop: "2rem" }}>
+                <h3
+                  style={{
+                    color: "rgba(255, 255, 255, 0.9)",
+                    margin: "0 0 1rem 0",
+                    fontSize: "1.2rem",
+                    fontWeight: "600",
+                    textAlign: "center",
+                  }}
+                >
+                  Character Interaction Network
+                </h3>
+                <CharacterGraph graphData={analysisResult.graph} />
+              </div>
+            )}
+          </>
         )}
 
-        {/* Hint Text */}
         {!meta && !loading && (
           <div
             style={{

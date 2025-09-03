@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { injectable } from 'inversify';
+import { promises as fs } from 'fs';
+import path from 'path';
 import {
   internalServerError,
   notFound,
@@ -10,6 +12,7 @@ import { Result, success, failure } from '../utils/result.js';
 
 export interface GutenbergService {
   fetchBookMetadata(bookId: string): Promise<Result<BookSummary>>;
+  downloadBookContent(bookId: string): Promise<Result<string>>;
 }
 
 @injectable()
@@ -57,6 +60,54 @@ export class Gutenberg implements GutenbergService {
       }
 
       return failure(internalServerError(`Error fetching book ${bookId}`));
+    }
+  }
+
+  async downloadBookContent(bookId: string): Promise<Result<string>> {
+    const contentUrl = `https://www.gutenberg.org/files/${bookId}/${bookId}-0.txt`;
+    const bookContentDir = path.join(process.cwd(), 'book-content');
+    const filePath = path.join(bookContentDir, `${bookId}.txt`);
+
+    try {
+      // Check if book content already exists
+      try {
+        const existingContent = await fs.readFile(filePath, 'utf-8');
+        return success(existingContent);
+      } catch (error) {
+        // File doesn't exist, continue to download
+      }
+
+      // Create book-content directory if it doesn't exist
+      try {
+        await fs.mkdir(bookContentDir, { recursive: true });
+      } catch (error) {
+        // Directory might already exist
+      }
+
+      // Download book content
+      const response = await axios.get(contentUrl, {
+        timeout: this.timeout,
+        responseType: 'text',
+      });
+
+      // Save book content to file
+      await fs.writeFile(filePath, response.data, 'utf-8');
+
+      return success(response.data);
+    } catch (error) {
+      console.error(`Could not download content for book ${bookId}:`, error);
+
+      if (error instanceof Error && error.message.includes('404')) {
+        return failure(notFound(`Book content for ${bookId} not found`));
+      }
+
+      if (error instanceof Error && error.message.includes('timeout')) {
+        return failure(
+          serviceUnavailable(`Request timeout while downloading book ${bookId}`)
+        );
+      }
+
+      return failure(internalServerError(`Error downloading book ${bookId}`));
     }
   }
 
@@ -193,9 +244,7 @@ export class Gutenberg implements GutenbergService {
       }
     }
 
-    // Clean up and validate the description
     if (description) {
-      // Clean up the description
       description = description
         .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
         .replace(/&quot;/g, '"') // Replace HTML entities
@@ -208,7 +257,6 @@ export class Gutenberg implements GutenbergService {
         .replace(/"$/, '') // Remove trailing quote if present
         .trim();
 
-      // Only use descriptions that are meaningful (not too short, not generic)
       if (
         description.length > 50 &&
         !description.toLowerCase().includes('project gutenberg') &&

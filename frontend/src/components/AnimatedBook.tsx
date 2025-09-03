@@ -18,13 +18,11 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
       const handleImageLoad = () => {
         setImageLoaded(true);
         onImageLoaded?.();
-        // Trigger animation after a short delay
         setTimeout(() => setShouldAnimate(true), 100);
       };
 
       const handleImageError = () => {
         console.warn("Failed to load image:", meta.imageUrl);
-        // Still show the book even if image fails to load
         onImageLoaded?.();
         setTimeout(() => setShouldAnimate(true), 100);
       };
@@ -33,7 +31,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
       img.onerror = handleImageError;
       img.src = meta.imageUrl;
 
-      // Fallback timeout in case image never loads/errors
       const timeout = setTimeout(() => {
         handleImageError();
       }, 5000);
@@ -44,7 +41,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
         img.onerror = null;
       };
     } else {
-      // No image URL, show immediately
       onImageLoaded?.();
       setTimeout(() => setShouldAnimate(true), 100);
     }
@@ -65,7 +61,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
         position: "relative",
       }}
     >
-      {/* Title appears above the book */}
       <div
         style={{
           opacity: shouldAnimate ? 1 : 0,
@@ -104,7 +99,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
         )}
       </div>
 
-      {/* Book container */}
       <div
         style={{
           position: "relative",
@@ -158,7 +152,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
             )}
           </div>
 
-          {/* Back of book (description) */}
           <div
             style={{
               position: "absolute",
@@ -212,45 +205,6 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
             </div>
           </div>
         </div>
-
-        {/* Hover hint */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "-3rem",
-            left: "50%",
-            transform: "translateX(-50%)",
-            opacity: shouldAnimate && !isFlipped ? 0.7 : 0,
-            transition: "opacity 0.3s ease",
-            color: "rgba(255, 255, 255, 0.8)",
-            fontSize: "0.9rem",
-            textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-            pointerEvents: "none",
-          }}
-        >
-          Hover to read description
-        </div>
-      </div>
-
-      {/* Additional hint text */}
-      <div
-        style={{
-          marginTop: "3rem",
-          textAlign: "center",
-          opacity: shouldAnimate ? 1 : 0,
-          transition: "opacity 0.5s ease-out 1.5s",
-        }}
-      >
-        <p
-          style={{
-            color: "rgba(255, 255, 255, 0.7)",
-            fontSize: "0.9rem",
-            margin: 0,
-            textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-          }}
-        >
-          DIGITIZED and TRANSCRIBED for PROJECT GUTENBERG
-        </p>
       </div>
     </div>
   );
