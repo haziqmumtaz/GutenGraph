@@ -28,11 +28,21 @@ export class Gutenberg implements GutenbergService {
 
       const metadata = this.extractMetadataFromHtml(response.data);
 
-      return success({
+      const result: BookSummary = {
         id: bookId,
         title: metadata.title,
         author: metadata.author,
-      });
+      };
+
+      if (metadata.imageUrl) {
+        result.imageUrl = metadata.imageUrl;
+      }
+
+      if (metadata.description) {
+        result.description = metadata.description;
+      }
+
+      return success(result);
     } catch (error) {
       console.warn(`Could not fetch metadata for book ${bookId}`);
 
@@ -88,6 +98,124 @@ export class Gutenberg implements GutenbergService {
           result.author = author;
           break;
         }
+      }
+    }
+
+    // Extract image URL - Project Gutenberg typically uses cover images
+    const imagePatterns = [
+      // Look for cover image with specific patterns
+      /<img[^>]*src=["']([^"']*cover[^"']*\.(?:jpg|jpeg|png|gif))[^"']*["'][^>]*>/i,
+      /<img[^>]*src=["']([^"']*\/covers\/[^"']*\.(?:jpg|jpeg|png|gif))[^"']*["'][^>]*>/i,
+      // Look for any image that might be the book cover in the content area
+      /<img[^>]*class=["'][^"']*cover[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/i,
+      /<img[^>]*src=["']([^"']+)["'][^>]*class=["'][^"']*cover[^"']*["'][^>]*>/i,
+      // Fallback to first image with book-related alt text
+      /<img[^>]*alt=["'][^"']*(?:cover|book)[^"']*["'][^>]*src=["']([^"']+)["'][^>]*>/i,
+      /<img[^>]*src=["']([^"']+)["'][^>]*alt=["'][^"']*(?:cover|book)[^"']*["'][^>]*>/i,
+    ];
+
+    for (const pattern of imagePatterns) {
+      const imageMatch = html.match(pattern);
+      if (imageMatch && imageMatch[1]) {
+        let imageUrl = imageMatch[1].trim();
+
+        // Handle relative URLs by making them absolute
+        if (imageUrl.startsWith('/')) {
+          imageUrl = `${this.baseUrl}${imageUrl}`;
+        } else if (imageUrl.startsWith('http')) {
+          // Already absolute URL
+        } else {
+          // Relative path, prepend base URL
+          imageUrl = `${this.baseUrl}/${imageUrl}`;
+        }
+
+        (result as any).imageUrl = imageUrl;
+        break;
+      }
+    }
+
+    // Extract description - Project Gutenberg uses specific summary-text-container structure
+    let description = '';
+
+    // First, try to extract from the new summary-text-container structure
+    const summaryContainerMatch = html.match(
+      /<div[^>]*class=["'][^"']*summary-text-container[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+    );
+    if (summaryContainerMatch && summaryContainerMatch[1]) {
+      const containerContent = summaryContainerMatch[1];
+
+      // Extract all text content from the container, then clean it up
+      let fullText = containerContent
+        .replace(/<script[\s\S]*?<\/script>/gi, '') // Remove any scripts
+        .replace(/<style[\s\S]*?<\/style>/gi, '') // Remove any styles
+        .replace(/<!--[\s\S]*?-->/g, '') // Remove comments
+        .replace(/<input[^>]*>/g, '') // Remove input elements
+        .replace(/<label[^>]*>[\s\S]*?<\/label>/g, '') // Remove labels
+        .replace(/<[^>]+>/g, '') // Remove all remaining HTML tags
+        .replace(/\s+/g, ' ') // Normalize whitespace
+        .trim();
+
+      // Remove common UI text that's not part of the description
+      fullText = fullText
+        .replace(/\.\.\.\s*Read More/g, '')
+        .replace(/Show Less/g, '')
+        .replace(/\(This is an automatically generated summary\.\)/g, '')
+        .trim();
+
+      if (fullText && fullText.length > 50) {
+        description = fullText;
+      }
+    }
+
+    // Fallback to other description patterns if summary-text-container not found
+    if (!description) {
+      const descriptionPatterns = [
+        // Look for meta description
+        /<meta\s+name=["']description["']\s+content=["']([^"']+)["'][^>]*>/i,
+        /<meta\s+content=["']([^"']+)["']\s+name=["']description["'][^>]*>/i,
+        // Look for structured data description
+        /<[^>]*itemprop=["']description["'][^>]*>([^<]+)<\/[^>]*>/i,
+        // Look for description in summary or abstract sections
+        /<summary[^>]*>([^<]+)<\/summary>/i,
+        /<p[^>]*class=["'][^"']*(?:summary|description|abstract)[^"']*["'][^>]*>([^<]+)<\/p>/i,
+        // Look for description in divs with relevant classes
+        /<div[^>]*class=["'][^"']*(?:summary|description|abstract)[^"']*["'][^>]*>(?:<[^>]*>)*([^<]+)/i,
+        // Look for first paragraph after title/author that looks like a description
+        /<p[^>]*>([^<]{100,500})<\/p>/i,
+      ];
+
+      for (const pattern of descriptionPatterns) {
+        const descriptionMatch = html.match(pattern);
+        if (descriptionMatch && descriptionMatch[1]) {
+          description = descriptionMatch[1].trim();
+          break;
+        }
+      }
+    }
+
+    // Clean up and validate the description
+    if (description) {
+      // Clean up the description
+      description = description
+        .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+        .replace(/&quot;/g, '"') // Replace HTML entities
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        .replace(/^"/, '') // Remove leading quote if present
+        .replace(/"$/, '') // Remove trailing quote if present
+        .trim();
+
+      // Only use descriptions that are meaningful (not too short, not generic)
+      if (
+        description.length > 50 &&
+        !description.toLowerCase().includes('project gutenberg') &&
+        !description.toLowerCase().includes('this ebook') &&
+        !description.toLowerCase().includes('free ebook')
+      ) {
+        (result as any).description = description;
       }
     }
 
