@@ -10,26 +10,19 @@ export interface GroqService {
   ): Promise<
     Result<{ characters: Array<{ name: string; aliases: string[] }> }>
   >;
-  analyzeInteractions(
+  analyzeInteractionsAndSentiments(
     text: string,
     characters: Array<{ name: string; aliases: string[] }>
   ): Promise<
     Result<{
       nodes: Array<{ id: string; name: string; val: number }>;
-      links: Array<{ source: string; target: string; value: number }>;
-    }>
-  >;
-  analyzeSentiments(
-    text: string,
-    links: Array<{ source: string; target: string; value: number }>
-  ): Promise<
-    Result<
-      Array<{
+      links: Array<{
         source: string;
         target: string;
+        value: number;
         sentiment: 'positive' | 'negative' | 'neutral';
-      }>
-    >
+      }>;
+    }>
   >;
 }
 
@@ -183,19 +176,24 @@ Extract all characters from this text (play or novel). Include both speaking and
     }
   }
 
-  async analyzeInteractions(
+  async analyzeInteractionsAndSentiments(
     text: string,
     characters: Array<{ name: string; aliases: string[] }>
   ): Promise<
     Result<{
       nodes: Array<{ id: string; name: string; val: number }>;
-      links: Array<{ source: string; target: string; value: number }>;
+      links: Array<{
+        source: string;
+        target: string;
+        value: number;
+        sentiment: 'positive' | 'negative' | 'neutral';
+      }>;
     }>
   > {
     const messages = [
       {
         role: 'system',
-        content: `You analyze character interactions in literary texts and return a graph structure. Return STRICT JSON ONLY. No prose.
+        content: `You analyze character interactions and their emotional sentiments in literary texts. Return STRICT JSON ONLY. No prose.
 
 OUTPUT SCHEMA (for react-force-graph):
 {
@@ -204,19 +202,32 @@ OUTPUT SCHEMA (for react-force-graph):
     { "id": "Juliet", "name": "Juliet", "val": 38 }
   ],
   "links": [
-    { "source": "Romeo", "target": "Juliet", "value": 23 },
-    { "source": "Juliet", "target": "Romeo", "value": 23 }
+    { "source": "Romeo", "target": "Juliet", "value": 23, "sentiment": "positive" },
+    { "source": "Tybalt", "target": "Romeo", "value": 15, "sentiment": "negative" },
+    { "source": "Mercutio", "target": "Romeo", "value": 12, "sentiment": "neutral" }
   ]
 }
 
-RULES:
+INTERACTION ANALYSIS RULES:
 - Count interactions between characters (speaking to each other, being in same scene, direct references)
 - Use character names as node IDs (exact matches from the provided character list)
 - Set node "val" to total interaction count for that character
 - Set link "value" to interaction count between those two characters
 - Include both directions for undirected interactions (A->B and B->A)
 - Only include characters from the provided list
-- Count interactions as: dialogue exchanges, scene co-presence, direct mentions`,
+- Count interactions as: dialogue exchanges, scene co-presence, direct mentions
+
+SENTIMENT CLASSIFICATION RULES:
+- "positive": Characters who are friends, lovers, allies, or have warm/affectionate interactions
+- "negative": Characters who are enemies, rivals, or have hostile/conflictual interactions
+- "neutral": Characters who interact but have neither clearly positive nor negative feelings
+
+ANALYSIS GUIDELINES:
+- Look for dialogue tone, actions, and narrative descriptions
+- Consider the overall context of their relationship
+- Focus on emotional dynamics rather than just plot events
+- Use character names exactly as provided in the source/target fields
+- Only include relationships that have interactions (value > 0)`,
       },
       {
         role: 'user',
@@ -226,7 +237,7 @@ ${text}
 CHARACTERS TO ANALYZE:
 ${characters.map(c => `${c.name}${c.aliases && c.aliases.length > 0 ? ` (aliases: ${c.aliases.join(', ')})` : ''}`).join('\n')}
 
-Analyze interactions between these characters and return the graph structure.`,
+Analyze both interactions and emotional sentiments between these characters and return the complete graph structure with sentiment data.`,
       },
     ];
 
@@ -244,90 +255,22 @@ Analyze interactions between these characters and return the graph structure.`,
         !Array.isArray(parsed.links)
       ) {
         return failure(
-          internalServerError('Invalid interaction analysis response')
+          internalServerError(
+            'Invalid interaction and sentiment analysis response'
+          )
         );
       }
 
-      console.log('Interactions analyzed');
+      console.log('Interactions and sentiments analyzed');
       return success({
         nodes: parsed.nodes,
         links: parsed.links,
       });
     } catch (error) {
       return failure(
-        internalServerError(`Failed to parse interaction analysis: ${error}`)
-      );
-    }
-  }
-
-  async analyzeSentiments(
-    text: string,
-    links: Array<{ source: string; target: string; value: number }>
-  ): Promise<
-    Result<
-      Array<{
-        source: string;
-        target: string;
-        sentiment: 'positive' | 'negative' | 'neutral';
-      }>
-    >
-  > {
-    const messages = [
-      {
-        role: 'system',
-        content: `You analyze the emotional sentiment of character relationships in literary texts. Return STRICT JSON ONLY. No prose.
-
-OUTPUT SCHEMA:
-{
-  "sentiments": [
-    { "source": "Romeo", "target": "Juliet", "sentiment": "positive" },
-    { "source": "Tybalt", "target": "Romeo", "sentiment": "negative" },
-    { "source": "Mercutio", "target": "Romeo", "sentiment": "neutral" }
-  ]
-}
-
-SENTIMENT CLASSIFICATION RULES:
-- "positive": Characters who are friends, lovers, allies, or have warm/affectionate interactions
-- "negative": Characters who are enemies, rivals, or have hostile/conflictual interactions
-- "neutral": Characters who interact but have neither clearly positive nor negative feelings
-
-ANALYSIS GUIDELINES:
-- Look for dialogue tone, actions, and narrative descriptions
-- Consider the overall context of their relationship
-- Focus on emotional dynamics rather than just plot events
-- Use character names exactly as provided in the source/target fields
-- Only analyze relationships that have interactions (value > 0)`,
-      },
-      {
-        role: 'user',
-        content: `TEXT:
-${text}
-
-CHARACTER RELATIONSHIPS TO ANALYZE:
-${links.map(link => `${link.source} ↔ ${link.target} (${link.value} interactions)`).join('\n')}
-
-Analyze the emotional sentiment of each character relationship and return the sentiment classification.`,
-      },
-    ];
-
-    const result = await this.makeRequest(messages);
-    if (!result.success) {
-      return result;
-    }
-
-    try {
-      const parsed = this.parseJSONResponse(result.data);
-      if (!parsed.sentiments || !Array.isArray(parsed.sentiments)) {
-        return failure(
-          internalServerError('Invalid sentiment analysis response')
-        );
-      }
-
-      console.log('Sentiments analyzed');
-      return success(parsed.sentiments);
-    } catch (error) {
-      return failure(
-        internalServerError(`Failed to parse sentiment analysis: ${error}`)
+        internalServerError(
+          `Failed to parse interaction and sentiment analysis: ${error}`
+        )
       );
     }
   }

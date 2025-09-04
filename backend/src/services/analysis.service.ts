@@ -87,54 +87,28 @@ export class Analysis implements AnalysisService {
       // Add 1 second delay between API calls
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Analyze interactions using Groq
-      const interactionResult = await groqService.analyzeInteractions(
-        textSample,
-        characterResult.data.characters
-      );
-      if (!interactionResult.success) {
-        return interactionResult;
-      }
-
-      // Add 1 second delay between API calls
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Analyze sentiments using Groq
-      const sentimentResult = await groqService.analyzeSentiments(
-        textSample,
-        interactionResult.data.links
-      );
-      if (!sentimentResult.success) {
-        return sentimentResult;
-      }
-
-      // Merge sentiment data with interaction data
-      const linksWithSentiments = interactionResult.data.links.map(link => {
-        const sentimentData = sentimentResult.data.find(
-          (s: {
-            source: string;
-            target: string;
-            sentiment: 'positive' | 'negative' | 'neutral';
-          }) => s.source === link.source && s.target === link.target
+      // Analyze interactions and sentiments using Groq (merged call)
+      const interactionAndSentimentResult =
+        await groqService.analyzeInteractionsAndSentiments(
+          textSample,
+          characterResult.data.characters
         );
-        return {
-          ...link,
-          sentiment: sentimentData?.sentiment || 'neutral',
-        };
-      });
+      if (!interactionAndSentimentResult.success) {
+        return interactionAndSentimentResult;
+      }
 
       // Filter out characters that don't have any interactions
       const nodesWithInteractions = new Set<string>();
 
       // Add all characters that appear in links
-      linksWithSentiments.forEach(link => {
+      interactionAndSentimentResult.data.links.forEach(link => {
         nodesWithInteractions.add(link.source);
         nodesWithInteractions.add(link.target);
       });
 
       // Filter nodes to only include those with interactions
-      const filteredNodes = interactionResult.data.nodes.filter(node =>
-        nodesWithInteractions.has(node.id)
+      const filteredNodes = interactionAndSentimentResult.data.nodes.filter(
+        node => nodesWithInteractions.has(node.id)
       );
 
       // Filter characters to only include those with interactions
@@ -145,7 +119,7 @@ export class Analysis implements AnalysisService {
       // Create filtered graph data
       const filteredGraph = {
         nodes: filteredNodes,
-        links: linksWithSentiments,
+        links: interactionAndSentimentResult.data.links,
       };
 
       // Create analysis result
