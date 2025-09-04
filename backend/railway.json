@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "yarn workspace @gutengraph/backend build",
+    "watchPatterns": ["/backend/**"]
+  },
+  "deploy": {
+    "runtime": "V2",
+    "numReplicas": 1,
+    "startCommand": "yarn workspace @gutengraph/backend start",
+    "sleepApplication": false
+  }
+}
