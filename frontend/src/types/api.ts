@@ -22,6 +22,7 @@ export type GraphLink = {
   source: string;
   target: string;
   value: number;
+  sentiment?: "positive" | "negative" | "neutral";
 };
 
 export type GraphData = {

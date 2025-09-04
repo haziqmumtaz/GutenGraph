@@ -19,13 +19,25 @@ export interface GroqService {
       links: Array<{ source: string; target: string; value: number }>;
     }>
   >;
+  analyzeSentiments(
+    text: string,
+    links: Array<{ source: string; target: string; value: number }>
+  ): Promise<
+    Result<
+      Array<{
+        source: string;
+        target: string;
+        sentiment: 'positive' | 'negative' | 'neutral';
+      }>
+    >
+  >;
 }
 
 @injectable()
 export class Groq implements GroqService {
   private readonly apiKey = process.env['GROQ_API_KEY'];
   private readonly baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  private readonly model = 'meta-llama/llama-4-scout-17b-16e-instruct';
+  private readonly model = 'llama-3.3-70b-versatile';
 
   private async makeRequest(
     messages: Array<{ role: string; content: string }>
@@ -51,7 +63,7 @@ export class Groq implements GroqService {
 
       return success(response.data.choices[0].message.content);
     } catch (error) {
-      console.warn('Groq API request failed:');
+      console.warn('Groq API request failed:', error);
 
       if (error instanceof Error && error.message.includes('timeout')) {
         return failure(serviceUnavailable('Groq API request timeout'));
@@ -244,6 +256,78 @@ Analyze interactions between these characters and return the graph structure.`,
     } catch (error) {
       return failure(
         internalServerError(`Failed to parse interaction analysis: ${error}`)
+      );
+    }
+  }
+
+  async analyzeSentiments(
+    text: string,
+    links: Array<{ source: string; target: string; value: number }>
+  ): Promise<
+    Result<
+      Array<{
+        source: string;
+        target: string;
+        sentiment: 'positive' | 'negative' | 'neutral';
+      }>
+    >
+  > {
+    const messages = [
+      {
+        role: 'system',
+        content: `You analyze the emotional sentiment of character relationships in literary texts. Return STRICT JSON ONLY. No prose.
+
+OUTPUT SCHEMA:
+{
+  "sentiments": [
+    { "source": "Romeo", "target": "Juliet", "sentiment": "positive" },
+    { "source": "Tybalt", "target": "Romeo", "sentiment": "negative" },
+    { "source": "Mercutio", "target": "Romeo", "sentiment": "neutral" }
+  ]
+}
+
+SENTIMENT CLASSIFICATION RULES:
+- "positive": Characters who are friends, lovers, allies, or have warm/affectionate interactions
+- "negative": Characters who are enemies, rivals, or have hostile/conflictual interactions
+- "neutral": Characters who interact but have neither clearly positive nor negative feelings
+
+ANALYSIS GUIDELINES:
+- Look for dialogue tone, actions, and narrative descriptions
+- Consider the overall context of their relationship
+- Focus on emotional dynamics rather than just plot events
+- Use character names exactly as provided in the source/target fields
+- Only analyze relationships that have interactions (value > 0)`,
+      },
+      {
+        role: 'user',
+        content: `TEXT:
+${text}
+
+CHARACTER RELATIONSHIPS TO ANALYZE:
+${links.map(link => `${link.source} ↔ ${link.target} (${link.value} interactions)`).join('\n')}
+
+Analyze the emotional sentiment of each character relationship and return the sentiment classification.`,
+      },
+    ];
+
+    const result = await this.makeRequest(messages);
+    if (!result.success) {
+      return result;
+    }
+
+    try {
+      const parsed = this.parseJSONResponse(result.data);
+      if (!parsed.sentiments || !Array.isArray(parsed.sentiments)) {
+        return failure(
+          internalServerError('Invalid sentiment analysis response')
+        );
+      }
+
+      console.log('Sentiments analyzed');
+      return success(parsed.sentiments);
+    } catch (error) {
+      return failure(
+        internalServerError(`Failed to parse sentiment analysis: ${error}`)
       );
     }
   }

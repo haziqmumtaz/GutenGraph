@@ -56,49 +56,11 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
         alignItems: "center",
         justifyContent: "center",
         width: "100%",
-        maxWidth: "600px",
+        maxWidth: "400px",
         perspective: "1000px",
         position: "relative",
       }}
     >
-      <div
-        style={{
-          opacity: shouldAnimate ? 1 : 0,
-          transform: shouldAnimate ? "translateY(0)" : "translateY(20px)",
-          transition: "all 0.8s ease-out 0.5s",
-          marginBottom: "2rem",
-          textAlign: "center",
-        }}
-      >
-        {title && (
-          <h1
-            style={{
-              fontSize: "2.5rem",
-              fontWeight: "bold",
-              color: "rgba(255, 255, 255, 0.95)",
-              textShadow: "0 4px 12px rgba(0,0,0,0.5)",
-              margin: "0 0 0.5rem 0",
-              lineHeight: 1.2,
-            }}
-          >
-            {title}
-          </h1>
-        )}
-        {author && (
-          <p
-            style={{
-              fontSize: "1.3rem",
-              color: "rgba(255, 255, 255, 0.8)",
-              textShadow: "0 2px 8px rgba(0,0,0,0.3)",
-              margin: 0,
-              fontStyle: "italic",
-            }}
-          >
-            by {author}
-          </p>
-        )}
-      </div>
-
       <div
         style={{
           position: "relative",

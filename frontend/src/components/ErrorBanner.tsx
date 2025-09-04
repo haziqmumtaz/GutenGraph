@@ -1,8 +1,9 @@
 interface ErrorBannerProps {
   message: string;
+  description?: string;
 }
 
-export function ErrorBanner({ message }: ErrorBannerProps) {
+export function ErrorBanner({ message, description }: ErrorBannerProps) {
   return (
     <div
       style={{
@@ -20,6 +21,7 @@ export function ErrorBanner({ message }: ErrorBannerProps) {
       }}
     >
       {message}
+      {description && <p>{description}</p>}
     </div>
   );
 }

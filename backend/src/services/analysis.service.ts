@@ -43,9 +43,28 @@ export class Analysis implements AnalysisService {
           await gutenbergService.downloadBookContent(bookId);
 
         if (!downloadResult.success) {
+          // Check if it's a 404 error (book content not available)
+          if (downloadResult.error?.status === 404) {
+            return failure(
+              notFound(
+                `Book content for ${bookId} is not available on Project Gutenberg.`
+              )
+            );
+          }
+
+          // Check if it's a timeout error
+          if (downloadResult.error?.status === 503) {
+            return failure(
+              notFound(
+                `Book content for ${bookId} could not be downloaded due to a timeout. Please try again later.`
+              )
+            );
+          }
+
+          // Generic download error
           return failure(
             notFound(
-              `Book content for ${bookId} not found and could not be downloaded`
+              `Book content for ${bookId} could not be downloaded. Please try again later.`
             )
           );
         }
@@ -65,6 +84,9 @@ export class Analysis implements AnalysisService {
         return characterResult;
       }
 
+      // Add 1 second delay between API calls
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
       // Analyze interactions using Groq
       const interactionResult = await groqService.analyzeInteractions(
         textSample,
@@ -74,11 +96,38 @@ export class Analysis implements AnalysisService {
         return interactionResult;
       }
 
+      // Add 1 second delay between API calls
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Analyze sentiments using Groq
+      const sentimentResult = await groqService.analyzeSentiments(
+        textSample,
+        interactionResult.data.links
+      );
+      if (!sentimentResult.success) {
+        return sentimentResult;
+      }
+
+      // Merge sentiment data with interaction data
+      const linksWithSentiments = interactionResult.data.links.map(link => {
+        const sentimentData = sentimentResult.data.find(
+          (s: {
+            source: string;
+            target: string;
+            sentiment: 'positive' | 'negative' | 'neutral';
+          }) => s.source === link.source && s.target === link.target
+        );
+        return {
+          ...link,
+          sentiment: sentimentData?.sentiment || 'neutral',
+        };
+      });
+
       // Filter out characters that don't have any interactions
       const nodesWithInteractions = new Set<string>();
 
       // Add all characters that appear in links
-      interactionResult.data.links.forEach(link => {
+      linksWithSentiments.forEach(link => {
         nodesWithInteractions.add(link.source);
         nodesWithInteractions.add(link.target);
       });
@@ -96,7 +145,7 @@ export class Analysis implements AnalysisService {
       // Create filtered graph data
       const filteredGraph = {
         nodes: filteredNodes,
-        links: interactionResult.data.links,
+        links: linksWithSentiments,
       };
 
       // Create analysis result

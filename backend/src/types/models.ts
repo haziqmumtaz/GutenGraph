@@ -29,6 +29,7 @@ export interface GraphLink {
   source: string;
   target: string;
   value: number;
+  sentiment?: 'positive' | 'negative' | 'neutral';
 }
 
 export interface GraphData {
