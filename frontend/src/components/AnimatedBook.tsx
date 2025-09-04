@@ -46,7 +46,7 @@ export function AnimatedBook({ meta, onImageLoaded }: AnimatedBookProps) {
     }
   }, [meta.imageUrl, onImageLoaded]);
 
-  const { title, author, description } = meta;
+  const { title, description } = meta;
 
   return (
     <div
