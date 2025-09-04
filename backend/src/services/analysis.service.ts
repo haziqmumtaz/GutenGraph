@@ -85,7 +85,7 @@ export class Analysis implements AnalysisService {
       }
 
       // Add 1 second delay between API calls
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Analyze interactions using Groq
       const interactionResult = await groqService.analyzeInteractions(
@@ -97,7 +97,7 @@ export class Analysis implements AnalysisService {
       }
 
       // Add 1 second delay between API calls
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Analyze sentiments using Groq
       const sentimentResult = await groqService.analyzeSentiments(

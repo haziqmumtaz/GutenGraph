@@ -1,5 +1,6 @@
 import Koa from 'koa';
 import bodyParser from 'koa-bodyparser';
+import cors from '@koa/cors';
 
 import { config } from './config.js';
 import { container } from './container.js';
@@ -17,6 +18,14 @@ export const createHttpApp = () => {
   });
 
   app.use(requestLogger());
+
+  // Enable CORS for all origins
+  app.use(
+    cors({
+      origin: '*',
+      credentials: true,
+    })
+  );
 
   app.use(
     bodyParser({
